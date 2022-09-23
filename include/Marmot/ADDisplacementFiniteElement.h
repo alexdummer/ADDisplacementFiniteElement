@@ -13,6 +13,7 @@
  *
  * Matthias Neuner matthias.neuner@uibk.ac.at
  * Magdalena Schreter magdalena.schreter@uibk.ac.at
+ * Alexander Dummer alexander.dummer@uibk.ac.at
  *
  * This file is part of the MAteRialMOdellingToolbox (marmot).
  *
@@ -27,6 +28,7 @@
  */
 #pragma once
 #include "Marmot/Marmot.h"
+#include "Marmot/MarmotAutomaticDifferentiation.h"
 #include "Marmot/MarmotConstants.h"
 #include "Marmot/MarmotElement.h"
 #include "Marmot/MarmotElementProperty.h"
@@ -34,11 +36,13 @@
 #include "Marmot/MarmotGeometryElement.h"
 #include "Marmot/MarmotJournal.h"
 #include "Marmot/MarmotLowerDimensionalStress.h"
-#include "Marmot/MarmotMaterialHypoElastic.h"
+#include "Marmot/MarmotMaterialHypoElasticAD.h"
 #include "Marmot/MarmotMath.h"
 #include "Marmot/MarmotStateVarVectorManager.h"
 #include "Marmot/MarmotTypedefs.h"
 #include "Marmot/MarmotVoigt.h"
+#include "autodiff/forward/dual.hpp"
+#include "autodiff/forward/dual/eigen.hpp"
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -49,7 +53,7 @@ using namespace Eigen;
 namespace Marmot::Elements {
 
   template < int nDim, int nNodes >
-  class DisplacementFiniteElement : public MarmotElement, public MarmotGeometryElement< nDim, nNodes > {
+  class ADDisplacementFiniteElement : public MarmotElement, public MarmotGeometryElement< nDim, nNodes > {
 
   public:
     enum SectionType {
@@ -110,7 +114,7 @@ namespace Marmot::Elements {
 
       std::unique_ptr< QPStateVarManager > managedStateVars;
 
-      std::unique_ptr< MarmotMaterialHypoElastic > material;
+      std::unique_ptr< MarmotMaterialHypoElasticAD > material;
 
       int getNumberOfRequiredStateVarsQuadraturePointOnly()
       {
@@ -135,9 +139,9 @@ namespace Marmot::Elements {
 
     std::vector< QuadraturePoint > qps;
 
-    DisplacementFiniteElement( int                                         elementID,
-                               FiniteElement::Quadrature::IntegrationTypes integrationType,
-                               SectionType                                 sectionType );
+    ADDisplacementFiniteElement( int                                         elementID,
+                                 FiniteElement::Quadrature::IntegrationTypes integrationType,
+                                 SectionType                                 sectionType );
 
     int getNumberOfRequiredStateVars();
 
@@ -210,7 +214,7 @@ namespace Marmot::Elements {
   };
 
   template < int nDim, int nNodes >
-  DisplacementFiniteElement< nDim, nNodes >::DisplacementFiniteElement(
+  ADDisplacementFiniteElement< nDim, nNodes >::ADDisplacementFiniteElement(
     int                                         elementID,
     FiniteElement::Quadrature::IntegrationTypes integrationType,
     SectionType                                 sectionType )
@@ -226,13 +230,13 @@ namespace Marmot::Elements {
   }
 
   template < int nDim, int nNodes >
-  int DisplacementFiniteElement< nDim, nNodes >::getNumberOfRequiredStateVars()
+  int ADDisplacementFiniteElement< nDim, nNodes >::getNumberOfRequiredStateVars()
   {
     return qps[0].getNumberOfRequiredStateVars() * qps.size();
   }
 
   template < int nDim, int nNodes >
-  std::vector< std::vector< std::string > > DisplacementFiniteElement< nDim, nNodes >::getNodeFields()
+  std::vector< std::vector< std::string > > ADDisplacementFiniteElement< nDim, nNodes >::getNodeFields()
   {
     using namespace std;
 
@@ -247,7 +251,7 @@ namespace Marmot::Elements {
   }
 
   template < int nDim, int nNodes >
-  std::vector< int > DisplacementFiniteElement< nDim, nNodes >::getDofIndicesPermutationPattern()
+  std::vector< int > ADDisplacementFiniteElement< nDim, nNodes >::getDofIndicesPermutationPattern()
   {
     static std::vector< int > permutationPattern;
     if ( permutationPattern.empty() )
@@ -258,7 +262,7 @@ namespace Marmot::Elements {
   }
 
   template < int nDim, int nNodes >
-  void DisplacementFiniteElement< nDim, nNodes >::assignStateVars( double* stateVars, int nStateVars )
+  void ADDisplacementFiniteElement< nDim, nNodes >::assignStateVars( double* stateVars, int nStateVars )
   {
     const int nQpStateVars = nStateVars / qps.size();
 
@@ -270,17 +274,17 @@ namespace Marmot::Elements {
   }
 
   template < int nDim, int nNodes >
-  void DisplacementFiniteElement< nDim, nNodes >::assignProperty( const ElementProperties& elementPropertiesInfo )
+  void ADDisplacementFiniteElement< nDim, nNodes >::assignProperty( const ElementProperties& elementPropertiesInfo )
   {
     new ( &elementProperties ) Eigen::Map< const Eigen::VectorXd >( elementPropertiesInfo.elementProperties,
                                                                     elementPropertiesInfo.nElementProperties );
   }
 
   template < int nDim, int nNodes >
-  void DisplacementFiniteElement< nDim, nNodes >::assignProperty( const MarmotMaterialSection& section )
+  void ADDisplacementFiniteElement< nDim, nNodes >::assignProperty( const MarmotMaterialSection& section )
   {
     for ( auto& qp : qps ) {
-      qp.material = std::unique_ptr< MarmotMaterialHypoElastic >( dynamic_cast< MarmotMaterialHypoElastic* >(
+      qp.material = std::unique_ptr< MarmotMaterialHypoElasticAD >( dynamic_cast< MarmotMaterialHypoElasticAD* >(
         MarmotLibrary::MarmotMaterialFactory::createMaterial( section.materialCode,
                                                               section.materialProperties,
                                                               section.nMaterialProperties,
@@ -295,13 +299,13 @@ namespace Marmot::Elements {
   }
 
   template < int nDim, int nNodes >
-  void DisplacementFiniteElement< nDim, nNodes >::assignNodeCoordinates( const double* coordinates )
+  void ADDisplacementFiniteElement< nDim, nNodes >::assignNodeCoordinates( const double* coordinates )
   {
     ParentGeometryElement::assignNodeCoordinates( coordinates );
   }
 
   template < int nDim, int nNodes >
-  void DisplacementFiniteElement< nDim, nNodes >::initializeYourself()
+  void ADDisplacementFiniteElement< nDim, nNodes >::initializeYourself()
   {
     for ( QuadraturePoint& qp : qps ) {
       const dNdXiSized    dNdXi = this->dNdXi( qp.xi );
@@ -326,13 +330,13 @@ namespace Marmot::Elements {
   }
 
   template < int nDim, int nNodes >
-  void DisplacementFiniteElement< nDim, nNodes >::computeYourself( const double* QTotal_,
-                                                                   const double* dQ_,
-                                                                   double*       Pe_,
-                                                                   double*       Ke_,
-                                                                   const double* time,
-                                                                   double        dT,
-                                                                   double&       pNewDT )
+  void ADDisplacementFiniteElement< nDim, nNodes >::computeYourself( const double* QTotal_,
+                                                                     const double* dQ_,
+                                                                     double*       Pe_,
+                                                                     double*       Ke_,
+                                                                     const double* time,
+                                                                     double        dT,
+                                                                     double&       pNewDT )
   {
     using namespace Marmot;
     using namespace ContinuumMechanics::VoigtNotation;
@@ -372,7 +376,35 @@ namespace Marmot::Elements {
           Matrix6d C66;
 
           Vector6d S6 = qp.managedStateVars->stress;
-          qp.material->computeStress( S6.data(), C66.data(), dE6.data(), time, dT, pNewDT );
+
+          // ----------------------------------------
+          // autodiff part
+          // ----------------------------------------
+          autodiff::VectorXdual stressDual( S6 );
+          autodiff::VectorXdual dEpsDual( dE6 );
+
+          // compute stress
+          qp.material->computeStress( stressDual.data(), dEpsDual.data(), time, dT, pNewDT );
+          // extract real parts from dual vector
+          for ( size_t i = 0; i < 6; i++ ) {
+            S6( i ) = (double)stressDual( i );
+          }
+
+          // compute tangent
+          C66 = Marmot::AutomaticDifferentiation::forwardMode(
+            [&]( const autodiff::VectorXdual& dE_ ) {
+              // handle zero strain increment
+              autodiff::VectorXdual dEps( dE_ );
+              if ( dE.isZero( 1e-15 ) )
+                dEps += Marmot::Vector6d::Ones() * 1e-15;
+
+              autodiff::VectorXdual s( S );
+              qp.material->computeStress( s.data(), dEps.data(), time, dT, pNewDT );
+              return s;
+            },
+            dE );
+          // ----------------------------------------
+
           qp.managedStateVars->stress = S6;
 
           S = reduce3DVoigt< ParentGeometryElement::voigtSize >( S6 );
@@ -384,7 +416,35 @@ namespace Marmot::Elements {
         if ( sectionType == SectionType::Solid ) {
 
           S = qp.managedStateVars->stress;
-          qp.material->computeStress( S.data(), C.data(), dE.data(), time, dT, pNewDT );
+
+          // ----------------------------------------
+          // autodiff part
+          // ----------------------------------------
+          autodiff::VectorXdual stressDual( S );
+          autodiff::VectorXdual dEpsDual( dE );
+
+          // compute stress
+          qp.material->computeStress( stressDual.data(), dEpsDual.data(), time, dT, pNewDT );
+          // extract real parts from dual vector
+          for ( size_t i = 0; i < 6; i++ ) {
+            S( i ) = (double)stressDual( i );
+          }
+
+          // compute tangent
+          C = Marmot::AutomaticDifferentiation::forwardMode(
+            [&]( const autodiff::VectorXdual& dE_ ) {
+              // handle zero strain increment
+              autodiff::VectorXdual dEps( dE_ );
+              if ( dE.isZero( 1e-15 ) )
+                dEps += Marmot::Vector6d::Ones() * 1e-15;
+
+              autodiff::VectorXdual s( S );
+              qp.material->computeStress( s.data(), dEps.data(), time, dT, pNewDT );
+              return s;
+            },
+            dE );
+          // ----------------------------------------
+
           qp.managedStateVars->stress = S;
         }
       }
@@ -400,7 +460,7 @@ namespace Marmot::Elements {
   }
 
   template < int nDim, int nNodes >
-  void DisplacementFiniteElement< nDim, nNodes >::setInitialConditions( StateTypes state, const double* values )
+  void ADDisplacementFiniteElement< nDim, nNodes >::setInitialConditions( StateTypes state, const double* values )
   {
     switch ( state ) {
     case MarmotElement::MarmotMaterialInitialization: {
@@ -434,14 +494,15 @@ namespace Marmot::Elements {
   }
 
   template < int nDim, int nNodes >
-  void DisplacementFiniteElement< nDim, nNodes >::computeDistributedLoad( MarmotElement::DistributedLoadTypes loadType,
-                                                                          double*                             P,
-                                                                          double*                             K,
-                                                                          const int     elementFace,
-                                                                          const double* load,
-                                                                          const double* QTotal,
-                                                                          const double* time,
-                                                                          double        dT )
+  void ADDisplacementFiniteElement< nDim, nNodes >::computeDistributedLoad(
+    MarmotElement::DistributedLoadTypes loadType,
+    double*                             P,
+    double*                             K,
+    const int                           elementFace,
+    const double*                       load,
+    const double*                       QTotal,
+    const double*                       time,
+    double                              dT )
   {
     Map< RhsSized > fU( P );
 
@@ -481,12 +542,12 @@ namespace Marmot::Elements {
   }
 
   template < int nDim, int nNodes >
-  void DisplacementFiniteElement< nDim, nNodes >::computeBodyForce( double*       P_,
-                                                                    double*       K,
-                                                                    const double* load,
-                                                                    const double* QTotal,
-                                                                    const double* time,
-                                                                    double        dT )
+  void ADDisplacementFiniteElement< nDim, nNodes >::computeBodyForce( double*       P_,
+                                                                      double*       K,
+                                                                      const double* load,
+                                                                      const double* QTotal,
+                                                                      const double* time,
+                                                                      double        dT )
   {
     Map< RhsSized >                              Pe( P_ );
     const Map< const Matrix< double, nDim, 1 > > f( load );
@@ -496,7 +557,7 @@ namespace Marmot::Elements {
   }
 
   template < int nDim, int nNodes >
-  std::vector< double > DisplacementFiniteElement< nDim, nNodes >::getCoordinatesAtCenter()
+  std::vector< double > ADDisplacementFiniteElement< nDim, nNodes >::getCoordinatesAtCenter()
   {
     std::vector< double > coords( nDim );
 
