@@ -380,29 +380,25 @@ namespace Marmot::Elements {
           // ----------------------------------------
           // autodiff part
           // ----------------------------------------
-          autodiff::VectorXdual stressDual( S6 );
-          autodiff::VectorXdual dEpsDual( dE6 );
+          // remember old state
+          const Vector6d stressOld       = qp.managedStateVars->stress;
+          const VectorXd matStateVarsOld = qp.managedStateVars->materialStateVars;
 
-          // compute stress
-          qp.material->computeStress( stressDual.data(), dEpsDual.data(), time, dT, pNewDT );
-          // extract real parts from dual vector
-          for ( size_t i = 0; i < 6; i++ ) {
-            S6( i ) = (double)stressDual( i );
-          }
-
-          // compute tangent
-          C66 = Marmot::AutomaticDifferentiation::forwardMode(
+          // compute stress and tangent with autodiff
+          std::tie( S6, C66 ) = Marmot::AutomaticDifferentiation::dF_dX(
             [&]( const autodiff::VectorXdual& dE_ ) {
-              // handle zero strain increment
-              autodiff::VectorXdual dEps( dE_ );
-              if ( dE.isZero( 1e-15 ) )
-                dEps += Marmot::Vector6d::Ones() * 1e-15;
+              // reset stateVars to old state
+              qp.managedStateVars->materialStateVars = matStateVarsOld;
 
-              autodiff::VectorXdual s( S );
+              // set up dual vectors
+              autodiff::VectorXdual dEps( dE_ );
+              autodiff::VectorXdual s( stressOld );
+
+              // compute stress
               qp.material->computeStress( s.data(), dEps.data(), time, dT, pNewDT );
               return s;
             },
-            dE );
+            dE6 );
           // ----------------------------------------
 
           qp.managedStateVars->stress = S6;
@@ -420,25 +416,21 @@ namespace Marmot::Elements {
           // ----------------------------------------
           // autodiff part
           // ----------------------------------------
-          autodiff::VectorXdual stressDual( S );
-          autodiff::VectorXdual dEpsDual( dE );
+          // remember old state
+          const Vector6d stressOld       = qp.managedStateVars->stress;
+          const VectorXd matStateVarsOld = qp.managedStateVars->materialStateVars;
 
-          // compute stress
-          qp.material->computeStress( stressDual.data(), dEpsDual.data(), time, dT, pNewDT );
-          // extract real parts from dual vector
-          for ( size_t i = 0; i < 6; i++ ) {
-            S( i ) = (double)stressDual( i );
-          }
-
-          // compute tangent
-          C = Marmot::AutomaticDifferentiation::forwardMode(
+          // compute stress and tangent with autodiff
+          std::tie( S, C ) = Marmot::AutomaticDifferentiation::dF_dX(
             [&]( const autodiff::VectorXdual& dE_ ) {
-              // handle zero strain increment
-              autodiff::VectorXdual dEps( dE_ );
-              if ( dE.isZero( 1e-15 ) )
-                dEps += Marmot::Vector6d::Ones() * 1e-15;
+              // reset stateVars to old state
+              qp.managedStateVars->materialStateVars = matStateVarsOld;
 
-              autodiff::VectorXdual s( S );
+              // set up dual vectors
+              autodiff::VectorXdual dEps( dE_ );
+              autodiff::VectorXdual s( stressOld );
+
+              // compute stress
               qp.material->computeStress( s.data(), dEps.data(), time, dT, pNewDT );
               return s;
             },
