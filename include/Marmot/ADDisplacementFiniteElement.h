@@ -385,7 +385,7 @@ namespace Marmot::Elements {
           const VectorXd matStateVarsOld = qp.managedStateVars->materialStateVars;
 
           // compute stress and tangent with autodiff
-          std::tie( S6, C66 ) = Marmot::AutomaticDifferentiation::dF_dX(
+          std::tie( S6, C66 ) = Marmot::AutomaticDifferentiation::jacobian(
             [&]( const autodiff::VectorXdual& dE_ ) {
               // reset stateVars to old state
               qp.managedStateVars->materialStateVars = matStateVarsOld;
@@ -421,7 +421,7 @@ namespace Marmot::Elements {
           const VectorXd matStateVarsOld = qp.managedStateVars->materialStateVars;
 
           // compute stress and tangent with autodiff
-          std::tie( S, C ) = Marmot::AutomaticDifferentiation::dF_dX(
+          std::tie( S, C ) = Marmot::AutomaticDifferentiation::jacobian(
             [&]( const autodiff::VectorXdual& dE_ ) {
               // reset stateVars to old state
               qp.managedStateVars->materialStateVars = matStateVarsOld;
