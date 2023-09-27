@@ -1,14 +1,15 @@
 set(MODULE_NAME
-    "DisplacementFiniteElement")
+    "ADDisplacementFiniteElement")
 
 set(MODULES_DEPENDENCIES
+    MarmotMathCore
     MarmotMechanicsCore
     MarmotFiniteElementCore 
     )
 
 set(DEPENDECIES_FULLFILLED TRUE)
 foreach( DEPENDENCY ${MODULES_DEPENDENCIES} )
-    if (NOT DEPENDENCY IN_LIST CORE_MODULES)
+    if (NOT DEPENDENCY IN_LIST INSTALLED_MODULES)
         message("----> " "module ${MODULE_NAME} dependency not fulfilled: ${DEPENDENCY}")
         set(DEPENDECIES_FULLFILLED FALSE)
     endif()
